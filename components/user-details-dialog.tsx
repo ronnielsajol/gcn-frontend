@@ -59,21 +59,6 @@ export const UserDetailsDialog = ({ isOpen, onClose, userId }: UserDetailsDialog
 								)}
 							</div>
 						</div>
-
-						{userData.address && (
-							<div className='space-y-3'>
-								<h4 className='font-semibold text-gray-900 flex items-center gap-2'>
-									<Building className='w-4 h-4' />
-									Additional Information
-								</h4>
-								<div className='space-y-2 pl-6'>
-									<div className='flex items-center gap-2 text-sm'>
-										<MapPin className='w-4 h-4 text-gray-400' />
-										<span className='text-gray-600'>{userData.address}</span>
-									</div>
-								</div>
-							</div>
-						)}
 					</div>
 				)}
 

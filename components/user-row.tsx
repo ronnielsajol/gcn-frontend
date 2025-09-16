@@ -4,7 +4,6 @@ import { User } from "@/types/index";
 import { Edit, Trash2, Loader2, Eye } from "lucide-react";
 import { TableCell, TableRow } from "./ui/table";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import UserAvatar from "./user-avatar";
 
 interface UserRowProps {
@@ -16,7 +15,7 @@ interface UserRowProps {
 	formatGender: (gender: string) => string;
 }
 
-const UserRow = ({ user, currentUser, isDeleting, onDelete, onView, formatGender }: UserRowProps) => {
+const UserRow = ({ user, currentUser, isDeleting, onDelete, onView }: UserRowProps) => {
 	return (
 		<TableRow>
 			<TableCell>
@@ -24,7 +23,7 @@ const UserRow = ({ user, currentUser, isDeleting, onDelete, onView, formatGender
 					<UserAvatar user={user} avatarSize='h-10 w-10' />
 					<div>
 						<p className='font-medium'>
-							{user.first_name} {user.last_name}
+							{user.first_name} {user.middle_initial} {user.last_name}
 						</p>
 						<p className='text-sm text-gray-500'>{user.email}</p>
 					</div>
@@ -33,9 +32,7 @@ const UserRow = ({ user, currentUser, isDeleting, onDelete, onView, formatGender
 			<TableCell>
 				<p className='text-sm'>{user.contact_number}</p>
 			</TableCell>
-			<TableCell>
-				<Badge variant='secondary'>{formatGender(user.gender)}</Badge>
-			</TableCell>
+
 			<TableCell>
 				<p className='text-sm text-gray-600'>{new Date(user.created_at).toLocaleDateString()}</p>
 			</TableCell>

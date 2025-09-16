@@ -429,7 +429,7 @@ export default function EventsPage() {
 												<div className='flex items-center gap-2'>
 													<Users className='w-4 h-4 text-gray-400' />
 													<span className='text-sm text-gray-600'>
-														{event.users.length} attendee{event.users.length !== 1 ? "s" : ""}
+														{event.users_count} attendee{event.users?.total !== 1 ? "s" : ""}
 													</span>
 												</div>
 												<div className='flex items-center gap-1'>
@@ -664,7 +664,7 @@ export default function EventsPage() {
 											</span>
 											<span className='flex items-center gap-1'>
 												<Users className='w-3 h-3' />
-												{eventToDelete.users.length} attendees
+												{eventToDelete.users_count} attendees
 											</span>
 										</div>
 									</div>

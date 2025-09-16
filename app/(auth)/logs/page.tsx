@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import UserAvatar from "@/components/user-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -309,14 +309,7 @@ export default function ActivityLogsPage() {
 
 													<div className='flex items-center gap-4 mb-3'>
 														<div className='flex items-center gap-2'>
-															<Avatar className='w-6 h-6'>
-																<AvatarFallback className='text-xs'>
-																	{log.admin?.name
-																		?.split(" ")
-																		.map((n) => n[0])
-																		.join("") || "?"}
-																</AvatarFallback>
-															</Avatar>
+														<UserAvatar user={{ name: log.admin?.name || null }} avatarSize='w-6 h-6' fallbackStyle='text-xs' />
 															<div>
 																<p className='text-sm font-medium text-gray-900'>{log.admin?.name || "Unknown Admin"}</p>
 																<p className='text-xs text-gray-500'>{log.admin?.email || "No email"}</p>

@@ -6,6 +6,7 @@ export type UserFilters = {
 	search?: string;
 	gender?: string;
 	religion?: string;
+	sphere?: string;
 };
 
 export type PaginationParams = {
@@ -24,6 +25,7 @@ export const fetchUsers = async (
 	if (filters.search) params.append("search", filters.search);
 	if (filters.gender && filters.gender !== "all") params.append("gender", filters.gender);
 	if (filters.religion && filters.religion !== "all") params.append("religion", filters.religion);
+	if (filters.sphere && filters.sphere !== "all") params.append("sphere_id", filters.sphere);
 
 	// Add pagination (Laravel uses 1-based indexing)
 	params.append("page", (pagination.pageIndex + 1).toString());

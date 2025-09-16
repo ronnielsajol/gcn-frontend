@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import UserAvatar from "@/components/user-avatar";
 import {
 	Upload,
 	X,
@@ -315,12 +315,7 @@ export default function CreateAdminPage() {
 							{/* Profile Picture Section */}
 							<div className='flex flex-col items-center space-y-4'>
 								<div className='relative'>
-									<Avatar className='w-24 h-24'>
-										<AvatarImage src={profileImagePreview || undefined} className='object-cover' />
-										<AvatarFallback className='text-lg'>
-											<User className='w-8 h-8' />
-										</AvatarFallback>
-									</Avatar>
+									<UserAvatar user={{ first_name: formData.first_name, last_name: formData.last_name }} avatarSize='w-24 h-24' srcOverride={profileImagePreview || undefined} fallbackStyle='text-lg' />
 								</div>
 
 								{/* Camera View */}

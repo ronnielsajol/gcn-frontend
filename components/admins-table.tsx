@@ -36,6 +36,7 @@ import {
 	ChevronsRight,
 } from "lucide-react";
 import { User } from "@/types/index";
+import UserAvatar from "./user-avatar";
 
 // Laravel pagination response type
 interface LaravelPaginationResponse {
@@ -177,26 +178,8 @@ export default function AdminsTable({ currentUser }: UsersTableProps) {
 		}
 	};
 
-	const formatGender = (gender: string) => gender.charAt(0).toUpperCase() + gender.slice(1);
-
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString();
-	};
-
-	useEffect(() => {
-		if (paginationData?.data) {
-			const religions = [
-				...new Set(paginationData.data.map((user) => user.religion).filter((religion) => religion && religion.trim() !== "")),
-			].sort();
-			setAvailableReligions(religions);
-		}
-	}, [paginationData]);
-
-	const formatOptionLabel = (value: string) => {
-		return value
-			.split("_")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
 	};
 
 	const columns = useMemo<ColumnDef<User>[]>(
@@ -225,24 +208,10 @@ export default function AdminsTable({ currentUser }: UsersTableProps) {
 					return (
 						<div className='flex items-center space-x-3'>
 							<div className='flex-shrink-0 w-10 h-10'>
-								{user.profile_image ? (
-									<img
-										src={user.profile_image}
-										alt={`${user.first_name} ${user.last_name}`}
-										className='w-10 h-10 rounded-full object-cover'
-									/>
-								) : (
-									<div className='w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center'>
-										<span className='text-sm font-medium text-gray-600'>{user.first_name.charAt(0).toUpperCase()}</span>
-									</div>
-								)}
+								{user.profile_image ?? <UserAvatar user={user} avatarSize={"w-10 h-10"} fallbackStyle={"font-semibold"} />}
 							</div>
 							<div>
 								<div className='font-medium text-gray-900'>{`${user.first_name} ${user.last_name}`}</div>
-								<div className='text-sm text-gray-500 flex items-center gap-2'>
-									{user.religion}
-									<span className='text-xs'>•</span>
-								</div>
 							</div>
 						</div>
 					);
@@ -273,32 +242,11 @@ export default function AdminsTable({ currentUser }: UsersTableProps) {
 						<div>
 							<div className='text-sm text-gray-900 flex items-center gap-2'>{user.email}</div>
 							<div className='text-sm text-gray-500'>{user.contact_number}</div>
-							<div className='text-xs text-gray-400 truncate max-w-[200px]'>{user.address}</div>
 						</div>
 					);
 				},
 			},
-			{
-				accessorKey: "gender",
-				header: ({ column }) => {
-					return (
-						<Button
-							variant='ghost'
-							onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-							className='h-8 p-0 font-semibold'>
-							Gender
-							{column.getIsSorted() === "asc" ? (
-								<ArrowUp className='ml-2 h-4 w-4' />
-							) : column.getIsSorted() === "desc" ? (
-								<ArrowDown className='ml-2 h-4 w-4' />
-							) : (
-								<ArrowUpDown className='ml-2 h-4 w-4' />
-							)}
-						</Button>
-					);
-				},
-				cell: ({ getValue }) => formatGender(getValue() as string),
-			},
+
 			{
 				accessorKey: "created_at",
 				header: ({ column }) => {
@@ -394,30 +342,6 @@ export default function AdminsTable({ currentUser }: UsersTableProps) {
 								/>
 							</div>
 						</div>
-						<Select value={genderFilter} onValueChange={setGenderFilter}>
-							<SelectTrigger className='w-full sm:w-[180px]'>
-								<SelectValue placeholder='Filter by gender' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all'>All Genders</SelectItem>
-								<SelectItem value='male'>Male</SelectItem>
-								<SelectItem value='female'>Female</SelectItem>
-								<SelectItem value='other'>Other</SelectItem>
-							</SelectContent>
-						</Select>
-						<Select value={religionFilter} onValueChange={setReligionFilter}>
-							<SelectTrigger className='w-full sm:w-[180px]'>
-								<SelectValue placeholder='Filter by religion' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all'>All Religions</SelectItem>
-								{availableReligions.map((religion) => (
-									<SelectItem key={religion} value={religion}>
-										{formatOptionLabel(religion)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
 					</div>
 					<Link href='/admins/new'>
 						<Button className='flex items-center gap-2'>

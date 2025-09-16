@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import UserAvatar from "@/components/user-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -356,15 +356,7 @@ export default function UserFilesPage() {
 						</Button>
 						<div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
 							<div className='flex items-center gap-4'>
-								<Avatar className='w-16 h-16'>
-									<AvatarImage src={user.profile_image || "/placeholder.svg"} className='object-cover' />
-									<AvatarFallback className='text-lg'>
-										{user.first_name
-											.split(" ")
-											.map((n) => n[0])
-											.join("")}
-									</AvatarFallback>
-								</Avatar>
+								<UserAvatar user={user} avatarSize='w-16 h-16' fallbackStyle='text-lg' />
 								<div>
 									<h1 className='text-2xl font-bold text-gray-900'>{user.first_name}&apos;s Files</h1>
 									<p className='text-gray-600'>{user.email}</p>

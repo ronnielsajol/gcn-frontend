@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+// Reusable avatar component
 import { Checkbox } from "@/components/ui/checkbox";
 import {
 	ArrowLeft,
@@ -24,6 +24,7 @@ import {
 	Loader2,
 	Trash2,
 	Download,
+	TrendingUp,
 } from "lucide-react";
 import { apiFetch, exportEventAttendees } from "@/lib/api";
 import type { Event } from "@/types";
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils";
 import EventAttendeesPageSkeleton from "@/components/skeletons/event-attendees-page-skeleton";
 import { UserDetailsDialog } from "@/components/user-details-dialog";
 import { AddAttendeesDialog } from "@/components/add-attendees-dialog";
+import { fetchStatsForEventSpheres } from "@/lib/api/stats";
 
 // --- React Query Setup ---
 const queryKeys = {
@@ -63,14 +65,14 @@ export default function EventAttendeesPage() {
 	const [isExporting, setIsExporting] = useState(false);
 
 	// --- Mutations ---
-	const { handleAttachUsers, isAttaching, attachError, handleDetachUsers, isDetaching, detachError } =
+	const { handleAttachUsers, isAttaching, attachError, handleDetachUsers, isDetaching } =
 		useEventAttendeesMutations(eventId);
 
 	// --- Data Fetching for Event Details ---
 	const {
 		data: event,
-		isLoading,
-		error,
+		isLoading: eventLoading,
+		error: eventError,
 	} = useQuery({
 		queryKey: queryKeys.eventDetails(eventId),
 		queryFn: () => fetchEventDetails(eventId),
@@ -78,13 +80,23 @@ export default function EventAttendeesPage() {
 		enabled: !!eventId,
 	});
 
+	const {
+		data: stats,
+		isLoading: statsLoading,
+		error: statsError,
+	} = useQuery({
+		queryKey: ["stats"],
+		queryFn: () => fetchStatsForEventSpheres(eventId),
+		staleTime: 1000 * 60 * 5,
+	});
+
 	// Show loading state
-	if (isLoading) {
+	if (eventLoading) {
 		return <EventAttendeesPageSkeleton />;
 	}
 
 	// Show error state
-	if (error) {
+	if (eventError) {
 		return (
 			<div className='min-h-screen bg-gray-50'>
 				<div className='py-8 px-4'>
@@ -99,7 +111,7 @@ export default function EventAttendeesPage() {
 									<CalendarDays className='w-16 h-16 mx-auto mb-4' />
 								</div>
 								<p className='text-gray-500 mb-4'>Failed to load event details</p>
-								<p className='text-sm text-red-600 mb-4'>{error.message}</p>
+								<p className='text-sm text-red-600 mb-4'>{eventError.message}</p>
 								<Button variant='outline' onClick={() => window.location.reload()} className='bg-transparent'>
 									Try Again
 								</Button>
@@ -137,11 +149,11 @@ export default function EventAttendeesPage() {
 	}
 
 	// --- Filtering Logic ---
-	const filteredAttendees = event.users.filter((user) => {
+	const filteredAttendees = event.users?.data.filter((user) => {
 		const matchesSearch =
-			user.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.email.toLowerCase().includes(searchTerm.toLowerCase());
+			user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+			user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+			user.email?.toLowerCase().includes(searchTerm.toLowerCase());
 		return matchesSearch;
 	});
 
@@ -162,7 +174,7 @@ export default function EventAttendeesPage() {
 	};
 
 	const handleExportEventAttendees = async () => {
-		if (event.users.length === 0) {
+		if (event.users?.data.length === 0) {
 			alert("No attendees to export");
 			return;
 		}
@@ -195,10 +207,10 @@ export default function EventAttendeesPage() {
 	};
 
 	const handleSelectAllAttendees = () => {
-		if (selectedAttendeesForDeletion.size === filteredAttendees.length && filteredAttendees.length > 0) {
+		if (selectedAttendeesForDeletion.size === filteredAttendees?.length && filteredAttendees?.length > 0) {
 			setSelectedAttendeesForDeletion(new Set()); // Deselect all
 		} else {
-			setSelectedAttendeesForDeletion(new Set(filteredAttendees.map((attendee) => attendee.id))); // Select all
+			setSelectedAttendeesForDeletion(new Set(filteredAttendees?.map((attendee) => attendee.id))); // Select all
 		}
 	};
 
@@ -264,12 +276,36 @@ export default function EventAttendeesPage() {
 									</div>
 								</div>
 								<div className='text-right'>
-									<div className='text-2xl font-bold text-blue-600'>{event.users.length}</div>
+									<div className='text-2xl font-bold text-blue-600'>{event.users?.total}</div>
 									<div className='text-sm text-gray-500'>Total Attendees</div>
 								</div>
 							</div>
 						</div>
 					</div>
+					{/* Stats */}
+					<Card className='mb-6'>
+						<CardHeader>
+							<div className='flex items-center gap-2'>
+								<TrendingUp className='h-5 w-5 text-primary' />
+								<CardTitle>Attendees by Sphere</CardTitle>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4  gap-4'>
+								{stats?.sphere_stats.map((stat) => (
+									<div key={stat.sphere_id} className='text-center p-4 rounded-lg  transition-colors'>
+										<div className='flex items-center justify-center mb-2'>
+											<Users className='h-5 w-5 text-primary' />
+										</div>
+										<div className='text-2xl font-bold text-primary mb-1'>{stat.user_count}</div>
+										<div className='text-sm text-muted-foreground leading-tight wrap-anywhere'>{stat.sphere_name}</div>
+										<div className='text-sm text-muted-foreground font-medium mt-1'>{stat.percentage}%</div>
+									</div>
+								))}
+							</div>
+						</CardContent>
+					</Card>
+
 					{/* Filters */}
 					<Card className='mb-6'>
 						<CardHeader>
@@ -285,11 +321,11 @@ export default function EventAttendeesPage() {
 									</Button>
 									<Button
 										onClick={handleExportEventAttendees}
-										disabled={isExporting || event.users.length === 0}
+										disabled={isExporting || event.users?.data.length === 0}
 										variant='outline'
 										className='flex items-center gap-2 bg-transparent'>
 										<Download className='w-4 h-4' />
-										{isExporting ? "Exporting..." : `Export Attendees (${event.users.length})`}
+										{isExporting ? "Exporting..." : `Export Attendees (${event.users?.data.length})`}
 									</Button>
 									{selectedAttendeesForDeletion.size > 0 && (
 										<Button
@@ -337,16 +373,16 @@ export default function EventAttendeesPage() {
 								<div className='flex items-center space-x-2'>
 									<Checkbox
 										id='select-all-attendees'
-										checked={selectedAttendeesForDeletion.size === filteredAttendees.length && filteredAttendees.length > 0}
+										checked={selectedAttendeesForDeletion.size === filteredAttendees?.length && filteredAttendees?.length > 0}
 										onCheckedChange={handleSelectAllAttendees}
-										disabled={filteredAttendees.length === 0}
+										disabled={filteredAttendees?.length === 0}
 									/>
 									<label htmlFor='select-all-attendees' className='text-sm font-medium'>
-										Select All ({filteredAttendees.length})
+										Select All ({filteredAttendees?.length})
 									</label>
 								</div>
 								<p className='text-sm text-gray-600'>
-									Showing {filteredAttendees.length} of {event.users.length} attendees
+									Showing {event.users?.to} of {event.users?.total} attendees
 								</p>
 								{searchTerm && (
 									<Button variant='outline' size='sm' onClick={clearFilters} className='bg-transparent'>
@@ -357,12 +393,12 @@ export default function EventAttendeesPage() {
 						</CardContent>
 					</Card>
 					{/* Attendees Display */}
-					{filteredAttendees.length > 0 ? (
+					{filteredAttendees && filteredAttendees.length > 0 ? (
 						<div
 							className={cn(
 								viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-3"
 							)}>
-							{filteredAttendees.map((attendee) => (
+							{filteredAttendees?.map((attendee) => (
 								<Card
 									key={attendee.id}
 									className={cn("hover:shadow-md transition-shadow cursor-pointer py-4", viewMode === "list" ? "p-0" : "")}
@@ -383,7 +419,7 @@ export default function EventAttendeesPage() {
 													<h3 className='font-semibold text-gray-900 truncate' title={`${attendee.first_name} ${attendee.last_name}`}>
 														{attendee.first_name} {attendee.last_name}
 													</h3>
-													<p className='text-sm text-gray-600 truncate' title={attendee.email}>
+													<p className='text-sm text-gray-600 truncate' title={attendee.email ?? ""}>
 														{attendee.email}
 													</p>
 													{attendee.contact_number && <p className='text-xs text-gray-500 mt-1'>{attendee.contact_number}</p>}
@@ -398,15 +434,7 @@ export default function EventAttendeesPage() {
 													checked={selectedAttendeesForDeletion.has(attendee.id)}
 													onCheckedChange={(checked) => handleToggleAttendeeForDeletion(attendee.id, !!checked)}
 												/>
-												<Avatar className='w-12 h-12'>
-													<AvatarImage src={attendee.profile_image || "/placeholder.svg"} />
-													<AvatarFallback>
-														{attendee.first_name
-															.split(" ")
-															.map((n) => n[0])
-															.join("")}
-													</AvatarFallback>
-												</Avatar>
+												<UserAvatar user={attendee} avatarSize='w-12 h-12' />
 												<div className='flex-1 min-w-0'>
 													<h3 className='font-semibold text-gray-900 truncate'>
 														{attendee.first_name} {attendee.last_name}
@@ -456,7 +484,7 @@ export default function EventAttendeesPage() {
 					<AddAttendeesDialog
 						isOpen={isAddAttendeesDialogOpen}
 						onClose={() => setIsAddAttendeesDialogOpen(false)}
-						currentAttendeeIds={event.users.map((user) => user.id)}
+						currentAttendeeIds={event.users?.data.map((user) => user.id) || []}
 						onAddUsers={handleAddUsersToEvent}
 						isAttaching={isAttaching}
 						attachError={attachError}

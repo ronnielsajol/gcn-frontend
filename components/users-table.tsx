@@ -16,7 +16,7 @@ import { ApiError, apiFetch, exportUsersWithEventCount } from "@/lib/api";
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,6 +43,7 @@ import {
 	CalendarDays,
 	Files,
 	Download,
+	TrendingUp,
 } from "lucide-react";
 import { EventForUserResponse, User } from "@/types/index";
 import { toast } from "sonner";
@@ -50,58 +51,19 @@ import { motion } from "motion/react";
 import { TableRowSkeleton } from "./skeletons/table-row-skeleton";
 import UserInfoDialog from "./user-info-dialog";
 import EventInfoDialog from "./user-events-dialog";
-import useDebounce from "@/hooks/use-debounce";
 import Image from "next/image";
 import { useUsers } from "@/hooks/use-users";
 import UserAvatar from "./user-avatar";
 
-// Laravel pagination response type
-interface LaravelPaginationResponse {
-	current_page: number;
-	data: User[];
-	first_page_url: string;
-	from: number;
-	last_page: number;
-	last_page_url: string;
-	links: Array<{
-		url: string | null;
-		label: string;
-		active: boolean;
-	}>;
-	next_page_url: string | null;
-	path: string;
-	per_page: number;
-	prev_page_url: string | null;
-	to: number;
-	total: number;
-}
-
-const fetchUsers = async (
-	filters: { search: string; gender: string; religion: string },
-	pagination: { pageIndex: number; pageSize: number },
-	sorting: SortingState
-): Promise<LaravelPaginationResponse> => {
-	const params = new URLSearchParams();
-
-	// Add filters
-	if (filters.search) params.append("search", filters.search);
-	if (filters.gender && filters.gender !== "all") params.append("gender", filters.gender);
-	if (filters.religion && filters.religion !== "all") params.append("religion", filters.religion);
-
-	// Add pagination (Laravel uses 1-based indexing)
-	params.append("page", (pagination.pageIndex + 1).toString());
-	params.append("per_page", pagination.pageSize.toString());
-
-	// Add sorting
-	if (sorting.length > 0) {
-		const sort = sorting[0];
-		params.append("sort", sort.id);
-		params.append("direction", sort.desc ? "desc" : "asc");
-	}
-
-	const queryString = params.toString();
-	const response = await apiFetch<LaravelPaginationResponse>(`/users?${queryString}`);
-	return response;
+// Sphere mapping constant
+const SPHERE_MAP: { [key: string]: string } = {
+	"1": "Church/Ministry",
+	"2": "Family/Community",
+	"3": "Government/Law",
+	"4": "Education/Sports",
+	"5": "Business/Economics",
+	"6": "Media/Arts/Entertainment",
+	"7": "Medicine/Science/Technology",
 };
 
 const fetchEventsForUser = async (userId: string): Promise<EventForUserResponse> => {
@@ -123,15 +85,14 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 
 	// --- State Management ---
 	const [searchTerm, setSearchTerm] = useState("");
-	const [genderFilter, setGenderFilter] = useState("all");
-	const [religionFilter, setReligionFilter] = useState("all");
+	const [sphereFilter, setSphereFilter] = useState("all");
 	const [selectedUser, setSelectedUser] = useState<User | null>(null);
 	const [sorting, setSorting] = useState<SortingState>([]);
-	const [availableReligions, setAvailableReligions] = useState<string[]>([]);
 	const [pagination, setPagination] = useState<PaginationState>({
 		pageIndex: 0,
 		pageSize: 15,
 	});
+
 	// State for delete confirmation dialog
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -140,13 +101,13 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 
 	useEffect(() => {
 		setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-	}, [searchTerm, genderFilter, religionFilter]);
+	}, [searchTerm, sphereFilter]);
 
 	const {
 		data: paginationData,
 		isLoading,
 		isError,
-	} = useUsers({ search: searchTerm, gender: genderFilter, religion: religionFilter }, pagination, sorting);
+	} = useUsers({ search: searchTerm, sphere: sphereFilter }, pagination, sorting);
 
 	const { data: userEvents, isLoading: isEventsLoading } = useQuery({
 		queryKey: ["userEvents", selectedUser?.id],
@@ -204,26 +165,8 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 		setIsEventsForUserDialogOpen(true);
 	};
 
-	const formatGender = (gender: string) => gender.charAt(0).toUpperCase() + gender.slice(1);
-
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString();
-	};
-
-	useEffect(() => {
-		if (paginationData?.data) {
-			const religions = [
-				...new Set(paginationData.data.map((user) => user.religion).filter((religion) => religion && religion.trim() !== "")),
-			].sort();
-			setAvailableReligions(religions);
-		}
-	}, [paginationData]);
-
-	const formatOptionLabel = (value: string) => {
-		return value
-			.split("_")
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(" ");
 	};
 
 	const columns = useMemo<ColumnDef<User>[]>(
@@ -266,10 +209,6 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 							</div>
 							<div>
 								<div className='font-medium text-gray-900'>{`${user.first_name} ${user.last_name}`}</div>
-								<div className='text-sm text-gray-500 flex items-center gap-2'>
-									{user.religion}
-									<span className='text-xs'>•</span>
-								</div>
 							</div>
 						</div>
 					);
@@ -283,7 +222,7 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 							variant='ghost'
 							onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
 							className='h-8 p-0 font-semibold'>
-							Contact Info
+							Email
 							{column.getIsSorted() === "asc" ? (
 								<ArrowUp className='ml-2 h-4 w-4' />
 							) : column.getIsSorted() === "desc" ? (
@@ -298,33 +237,77 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 					const user = row.original;
 					return (
 						<div>
-							<div className='text-sm text-gray-900 flex items-center gap-2'>{user.email}</div>
-							<div className='text-sm text-gray-500'>{user.contact_number}</div>
-							<div className='text-xs text-gray-400 truncate max-w-[200px]'>{user.address}</div>
+							<div className='text-sm text-gray-900 flex items-center gap-2'>{user.email ? user.email : "N/A"}</div>
+							<div className='text-sm text-gray-500'>{user.mobile_number}</div>
 						</div>
 					);
 				},
 			},
+
 			{
-				accessorKey: "gender",
-				header: ({ column }) => {
-					return (
-						<Button
-							variant='ghost'
-							onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-							className='h-8 p-0 font-semibold'>
-							Gender
-							{column.getIsSorted() === "asc" ? (
-								<ArrowUp className='ml-2 h-4 w-4' />
-							) : column.getIsSorted() === "desc" ? (
-								<ArrowDown className='ml-2 h-4 w-4' />
-							) : (
-								<ArrowUpDown className='ml-2 h-4 w-4' />
-							)}
-						</Button>
-					);
+				accessorKey: "spheres",
+				header: () => {
+					return <span className='font-semibold'>Spheres</span>;
 				},
-				cell: ({ getValue }) => formatGender(getValue() as string),
+				cell: ({ row }) => {
+					const spheres = row.original.vocation_work_sphere;
+
+					// Mapping function to convert sphere IDs to names
+					const getSphereNames = (sphereData: string | number | string[] | number[] | object[] | object | null): string => {
+						if (!sphereData) return "";
+
+						// Handle array of sphere data
+						if (Array.isArray(sphereData)) {
+							return sphereData
+								.map((item) => {
+									let id: string;
+
+									// Handle different data structures:
+									if (typeof item === "object" && item !== null) {
+										// If sphere is an object with id property
+										const obj = item as Record<string, unknown>;
+										id = String(obj.id || obj.sphere_id || obj.value || item);
+									} else {
+										// If sphere is a primitive value
+										id = String(item);
+									}
+
+									const mappedName = SPHERE_MAP[id];
+									console.log(`Mapping sphere ID ${id} to: ${mappedName}`);
+									return mappedName || id;
+								})
+								.join(", ");
+						}
+
+						// Handle comma-separated string of sphere IDs
+						if (typeof sphereData === "string" && sphereData.includes(",")) {
+							return sphereData
+								.split(",")
+								.map((id) => id.trim()) // Remove whitespace
+								.filter((id) => id) // Remove empty strings
+								.map((id) => {
+									const mappedName = SPHERE_MAP[id];
+									console.log(`Mapping sphere ID ${id} to: ${mappedName}`);
+									return mappedName || id;
+								})
+								.join(", ");
+						}
+
+						// Handle single sphere (object or primitive)
+						let id: string;
+						if (typeof sphereData === "object" && sphereData !== null) {
+							const obj = sphereData as Record<string, unknown>;
+							id = String(obj.id || obj.sphere_id || obj.value || sphereData);
+						} else {
+							id = String(sphereData);
+						}
+
+						const mappedName = SPHERE_MAP[id];
+						return mappedName || id;
+					};
+
+					return getSphereNames(spheres);
+				},
 			},
 			{
 				accessorKey: "created_at",
@@ -349,11 +332,12 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 			},
 			{
 				id: "actions",
-				header: "Actions",
+				header: () => {
+					return <span className='font-semibold'>Actions</span>;
+				},
 				cell: ({ row }) => {
 					const user = row.original;
 					// const isCurrentUser = currentUser.id === user.id;
-
 					return (
 						<div className='flex items-center gap-2'>
 							<Button variant='outline' size='sm' onClick={() => handleOpenEventsDialog(user)}>
@@ -423,30 +407,23 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 								/>
 							</div>
 						</div>
-						<Select value={genderFilter} onValueChange={setGenderFilter}>
-							<SelectTrigger className='w-full sm:w-[180px]'>
-								<SelectValue placeholder='Filter by gender' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all'>All Genders</SelectItem>
-								<SelectItem value='male'>Male</SelectItem>
-								<SelectItem value='female'>Female</SelectItem>
-								<SelectItem value='other'>Other</SelectItem>
-							</SelectContent>
-						</Select>
-						<Select value={religionFilter} onValueChange={setReligionFilter}>
-							<SelectTrigger className='w-full sm:w-[180px]'>
-								<SelectValue placeholder='Filter by religion' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all'>All Religions</SelectItem>
-								{availableReligions.map((religion) => (
-									<SelectItem key={religion} value={religion}>
-										{formatOptionLabel(religion)}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<div className='flex gap-2'>
+							<Select value={sphereFilter} onValueChange={setSphereFilter}>
+								<SelectTrigger className='w-[220px]'>
+									<SelectValue placeholder='Filter by sphere' />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value='all'>All Spheres</SelectItem>
+									<SelectItem value='1'>Church/Ministry</SelectItem>
+									<SelectItem value='2'>Family/Community</SelectItem>
+									<SelectItem value='3'>Government/Law</SelectItem>
+									<SelectItem value='4'>Education/Sports</SelectItem>
+									<SelectItem value='5'>Business/Economics</SelectItem>
+									<SelectItem value='6'>Media/Arts/Entertainment</SelectItem>
+									<SelectItem value='7'>Medicine/Science/Technology</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
 					</div>
 					<div className='flex gap-2'>
 						<Link href='/users/new'>
@@ -455,9 +432,13 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 								Add User
 							</Button>
 						</Link>
-						<Button onClick={handleExportUsersWithEventCount} variant='outline' className='flex items-center gap-2 bg-transparent'>
-							<Download className='w-4 h-4' />
-							Export CSV
+						<Button
+							onClick={handleExportUsersWithEventCount}
+							variant='outline'
+							className='flex items-center gap-2 bg-transparent'
+							disabled={isExporting}>
+							{isExporting ? <Loader2 className='w-4 h-4 animate-spin' /> : <Download className='w-4 h-4' />}
+							{isExporting ? "Exporting..." : "Export CSV"}
 						</Button>
 					</div>
 				</CardContent>
@@ -470,7 +451,6 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 							<colgroup>
 								<col style={{ width: "20%" }} />
 								<col style={{ width: "25%" }} />
-								<col style={{ width: "10%" }} />
 								<col style={{ width: "15%" }} />
 								<col style={{ width: "30%" }} />
 							</colgroup>

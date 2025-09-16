@@ -1,35 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { User } from "@/types";
-import {
-	AlertCircle,
-	Camera,
-	FileText,
-	Heart,
-	Loader2,
-	Mail,
-	MapPin,
-	Maximize2,
-	Phone,
-	RotateCcw,
-	SwitchCamera,
-	Upload,
-	User as UserIcon,
-	Users,
-	X,
-} from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertCircle, Heart, Loader2, Mail, MapPin, Phone, User as UserIcon, Users } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "./ui/alert";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge } from "./ui/badge";
 
 interface CreateUserDialogProps {
 	isOpen: boolean;

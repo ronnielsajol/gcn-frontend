@@ -10,9 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import UserAvatar from "@/components/user-avatar";
 import {
 	Upload,
 	X,
@@ -20,9 +19,6 @@ import {
 	User as UserIcon,
 	Mail,
 	Phone,
-	MapPin,
-	Users,
-	Heart,
 	ArrowLeft,
 	Loader2,
 	AlertCircle,
@@ -75,9 +71,6 @@ export default function EditUserPage() {
 	const [formData, setFormData] = useState({
 		first_name: "",
 		last_name: "",
-		address: "",
-		gender: "",
-		religion: "",
 		contact_number: "",
 		email: "",
 		role: "admin",
@@ -127,9 +120,6 @@ export default function EditUserPage() {
 			setFormData({
 				first_name: adminData.first_name || "",
 				last_name: adminData.last_name || "",
-				address: adminData.address || "",
-				gender: adminData.gender || "",
-				religion: adminData.religion || "",
 				contact_number: adminData.contact_number || "",
 				email: adminData.email || "",
 				role: adminData.role || "admin",
@@ -330,10 +320,6 @@ export default function EditUserPage() {
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!formData.gender) {
-			setError("Please select a gender.");
-			return;
-		}
 
 		// Build the FormData object for submission
 		const submissionData = new FormData();
@@ -413,12 +399,12 @@ export default function EditUserPage() {
 							{/* Profile Picture Section */}
 							<div className='flex flex-col items-center space-y-4'>
 								<div className='relative'>
-									<Avatar className='w-24 h-24'>
-										<AvatarImage src={profileImagePreview || undefined} className='object-cover' />
-										<AvatarFallback className='text-lg'>
-											<UserIcon className='w-8 h-8' />
-										</AvatarFallback>
-									</Avatar>
+									<UserAvatar
+										user={adminData || null}
+										avatarSize='w-24 h-24'
+										srcOverride={profileImagePreview || undefined}
+										fallbackStyle='text-lg'
+									/>
 									{profileImagePreview && (
 										<Button
 											type='button'
@@ -586,57 +572,6 @@ export default function EditUserPage() {
 										required
 									/>
 								</div>
-								<div className='space-y-2'>
-									<Label htmlFor='gender' className='flex items-center gap-2'>
-										<Users className='w-4 h-4' />
-										Gender *
-									</Label>
-									<Select value={formData.gender} onValueChange={(value) => handleInputChange("gender", value)}>
-										<SelectTrigger className='w-full'>
-											<SelectValue placeholder='Select gender' />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value='male'>Male</SelectItem>
-											<SelectItem value='female'>Female</SelectItem>
-											<SelectItem value='other'>Other</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-
-								<div className='space-y-2 md:col-span-2'>
-									<Label htmlFor='religion' className='flex items-center gap-2'>
-										<Heart className='w-4 h-4' />
-										Religion
-									</Label>
-									<Select value={formData.religion} onValueChange={(value) => handleInputChange("religion", value)}>
-										<SelectTrigger>
-											<SelectValue placeholder='Select religion (optional)' />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectItem value='Roman Catholic'>Roman Catholic</SelectItem>
-											<SelectItem value='Muslim'>Muslim</SelectItem>
-											<SelectItem value='Iglesia ni Cristo'>Iglesia ni Cristo</SelectItem>
-											<SelectItem value='Christian'>Christian</SelectItem>
-											<SelectItem value='Other'>Other</SelectItem>
-										</SelectContent>
-									</Select>
-								</div>
-							</div>
-
-							{/* Address */}
-							<div className='space-y-2'>
-								<Label htmlFor='address' className='flex items-center gap-2'>
-									<MapPin className='w-4 h-4' />
-									Address *
-								</Label>
-								<Textarea
-									id='address'
-									placeholder='Enter complete address'
-									value={formData.address}
-									onChange={(e) => handleInputChange("address", e.target.value)}
-									className='min-h-[80px]'
-									required
-								/>
 							</div>
 
 							{/* Files Section */}

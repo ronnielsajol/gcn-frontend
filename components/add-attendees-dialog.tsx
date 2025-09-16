@@ -103,9 +103,9 @@ export const AddAttendeesDialog = ({
 	const availableUsers = allUsers.filter(
 		(user) =>
 			!currentAttendeeIds.includes(user.id) &&
-			(user.first_name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-				user.last_name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-				user.email.toLowerCase().includes(userSearchTerm.toLowerCase()))
+			(user.first_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+				user.last_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+				user.email?.toLowerCase().includes(userSearchTerm.toLowerCase()))
 	);
 
 	return (
