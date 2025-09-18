@@ -108,6 +108,7 @@ export type UserWithRelations = User & {
 };
 
 export interface Event {
+	attended_count: number;
 	id: number;
 	name: string;
 	description: string;

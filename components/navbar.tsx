@@ -64,7 +64,7 @@ export default function Navbar() {
 	});
 
 	return (
-		<nav className='sticky top-0 z-50 px-26 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60'>
+		<nav className='sticky top-0 z-50 px-0 md:px-26 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60'>
 			<div className='container mx-auto px-4'>
 				<div className='flex h-16 items-center justify-between'>
 					<div className='flex items-center space-x-4'>
@@ -100,8 +100,8 @@ export default function Navbar() {
 						{/* User Menu */}
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<Button variant='ghost' className='relative h-8 w-8 rounded-full'>
-									<UserAvatar user={user} avatarSize={"w-10 h-10"} fallbackStyle={"font-semibold"} />
+								<Button variant='ghost' className='relative h-8 w-8 rounded-full '>
+									<UserAvatar user={user} avatarSize={"w-10 h-10 max-sm:hidden"} fallbackStyle={"font-semibold"} />
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent className='w-56' align='end' forceMount>
@@ -148,10 +148,6 @@ export default function Navbar() {
 								</Button>
 							</SheetTrigger>
 							<SheetContent side='right' className='w-[300px] sm:w-[400px]'>
-								<SheetHeader>
-									<SheetTitle>Navigation</SheetTitle>
-									<SheetDescription>Access all features and settings</SheetDescription>
-								</SheetHeader>
 								<div className='mt-6 space-y-4'>
 									{/* Mobile Navigation */}
 									<div className='space-y-2'>

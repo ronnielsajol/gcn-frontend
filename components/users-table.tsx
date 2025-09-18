@@ -273,7 +273,6 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 									}
 
 									const mappedName = SPHERE_MAP[id];
-									console.log(`Mapping sphere ID ${id} to: ${mappedName}`);
 									return mappedName || id;
 								})
 								.join(", ");
@@ -287,7 +286,6 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 								.filter((id) => id) // Remove empty strings
 								.map((id) => {
 									const mappedName = SPHERE_MAP[id];
-									console.log(`Mapping sphere ID ${id} to: ${mappedName}`);
 									return mappedName || id;
 								})
 								.join(", ");
@@ -306,7 +304,7 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 						return mappedName || id;
 					};
 
-					return getSphereNames(spheres);
+					return spheres ? getSphereNames(spheres) : "N/A";
 				},
 			},
 			{
@@ -421,6 +419,7 @@ export default function UsersTable({ currentUser }: UsersTableProps) {
 									<SelectItem value='5'>Business/Economics</SelectItem>
 									<SelectItem value='6'>Media/Arts/Entertainment</SelectItem>
 									<SelectItem value='7'>Medicine/Science/Technology</SelectItem>
+									<SelectItem value='0'>None</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>
