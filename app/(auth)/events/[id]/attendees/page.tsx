@@ -26,8 +26,8 @@ import {
 	Download,
 	TrendingUp,
 } from "lucide-react";
-import { apiFetch, exportEventAttendees } from "@/lib/api";
-import type { Event } from "@/types";
+import { apiFetch, exportEventAttendees, exportEventAttendeesPDF } from "@/lib/api";
+import type { Event, UserForEvent } from "@/types";
 import { useEventAttendeesMutations } from "@/hooks/useEventAttendeesMutations";
 import { toast } from "sonner";
 import UserAvatar from "@/components/user-avatar";
@@ -46,12 +46,30 @@ import {
 	PaginationPrevious,
 	PaginationEllipsis,
 } from "@/components/ui/pagination";
+import useDebounce from "@/hooks/use-debounce";
 
 // --- React Query Setup ---
 const queryKeys = {
 	eventDetails: (eventId: string, page: number, perPage: number, search: string) =>
 		["events", eventId, "attendees", page, perPage, search] as const,
+	eventUsers: (eventId: string, page?: number, search?: string) => ["events", eventId, "users", page, search] as const,
 	paginatedUsers: () => ["users", "paginated"] as const,
+};
+
+const fetchEventUsers = async (
+	eventId: string,
+	page: number = 1,
+	search: string = "",
+	perPage: number = 20
+): Promise<UserForEvent> => {
+	const params = new URLSearchParams();
+	params.append("page", page.toString());
+	params.append("per_page", perPage.toString());
+	if (search.trim()) {
+		params.append("search", search.trim());
+	}
+	const response = await apiFetch<UserForEvent>(`/events/${eventId}/users?${params.toString()}`, "GET");
+	return response;
 };
 
 export default function EventAttendeesPage() {
@@ -60,6 +78,7 @@ export default function EventAttendeesPage() {
 	const eventId = params.id as string;
 
 	const [searchTerm, setSearchTerm] = useState("");
+	const debouncedSearchTerm = useDebounce(searchTerm, 500);
 	const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 	const [isAddAttendeesDialogOpen, setIsAddAttendeesDialogOpen] = useState(false);
 	const [selectedAttendeesForDeletion, setSelectedAttendeesForDeletion] = useState<Set<string>>(new Set()); // For deleting attendees
@@ -67,6 +86,10 @@ export default function EventAttendeesPage() {
 	// New state for user details dialog
 	const [selectedUser, setSelectedUser] = useState<string | null>(null);
 	const [isUserDetailsDialogOpen, setIsUserDetailsDialogOpen] = useState(false);
+
+	// Pagination state
+	const [currentPage, setCurrentPage] = useState(1);
+	const [perPage] = useState(20);
 
 	const [isExporting, setIsExporting] = useState(false);
 
@@ -76,10 +99,10 @@ export default function EventAttendeesPage() {
 		pageSize: 20,
 	});
 
-	// Reset pagination when search changes
+	// Reset page to 1 when search term changes
 	useEffect(() => {
-		setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-	}, [searchTerm]);
+		setCurrentPage(1);
+	}, [debouncedSearchTerm]);
 
 	// --- Mutations ---
 	const { handleAttachUsers, isAttaching, attachError, handleDetachUsers, isDetaching } =
@@ -104,6 +127,18 @@ export default function EventAttendeesPage() {
 	} = useQuery({
 		queryKey: queryKeys.eventDetails(eventId, pagination.pageIndex + 1, pagination.pageSize, searchTerm),
 		queryFn: () => fetchEventDetails(eventId, pagination.pageIndex + 1, pagination.pageSize, searchTerm),
+		staleTime: 1000 * 60 * 5,
+		enabled: !!eventId,
+	});
+
+	// --- Data Fetching for event users ---
+	const {
+		data: eventUsers,
+		isLoading: isUsersLoading,
+		error: usersError,
+	} = useQuery({
+		queryKey: queryKeys.eventUsers(eventId, currentPage, debouncedSearchTerm),
+		queryFn: () => fetchEventUsers(eventId, currentPage, debouncedSearchTerm, perPage),
 		staleTime: 1000 * 60 * 5,
 		enabled: !!eventId,
 	});
@@ -176,8 +211,10 @@ export default function EventAttendeesPage() {
 		);
 	}
 
+	// --- Filtering Logic ---
+	const filteredAttendees = eventUsers?.users.data || [];
+
 	// --- Helper Functions ---
-	const attendees = event.users?.data;
 	const formatDateTime = (dateString: string) => {
 		const date = new Date(dateString);
 		return {
@@ -210,6 +247,25 @@ export default function EventAttendeesPage() {
 		}
 	};
 
+	const handleExportEventAttendeesPDF = async () => {
+		if (eventUsers?.users.total === 0) {
+			alert("No attendees to export");
+			return;
+		}
+
+		setIsExporting(true);
+		try {
+			await exportEventAttendeesPDF(Number(eventId));
+			console.log(`Event ${eventId} attendees PDF exported successfully`);
+			toast.success("PDF export completed successfully!");
+		} catch (error) {
+			console.error("Event attendees PDF export failed:", error);
+			toast.error("PDF export failed. Please try again.");
+		} finally {
+			setIsExporting(false);
+		}
+	};
+
 	const handleOpenAddAttendeesDialog = () => {
 		setIsAddAttendeesDialogOpen(true);
 	};
@@ -227,10 +283,10 @@ export default function EventAttendeesPage() {
 	};
 
 	const handleSelectAllAttendees = () => {
-		if (selectedAttendeesForDeletion.size === attendees?.length && attendees?.length > 0) {
+		if (selectedAttendeesForDeletion.size === filteredAttendees?.length && filteredAttendees?.length > 0) {
 			setSelectedAttendeesForDeletion(new Set()); // Deselect all
 		} else {
-			setSelectedAttendeesForDeletion(new Set(attendees?.map((attendee) => attendee.id))); // Select all
+			setSelectedAttendeesForDeletion(new Set(filteredAttendees?.map((attendee) => attendee.id))); // Select all
 		}
 	};
 
@@ -259,6 +315,16 @@ export default function EventAttendeesPage() {
 		const response = await handleAttachUsers(userIds);
 		toast.success(`Added ${response.stats.newly_attached} attendees successfully!`);
 	};
+
+	// Pagination handlers
+	const handlePageChange = (page: number) => {
+		setCurrentPage(page);
+		setSelectedAttendeesForDeletion(new Set());
+	};
+
+	const totalPages = eventUsers?.users.last_page || 1;
+	const hasNextPage = eventUsers?.users.next_page_url !== null;
+	const hasPreviousPage = eventUsers?.users.prev_page_url !== null;
 
 	return (
 		<div className='min-h-screen bg-gray-50'>
@@ -344,49 +410,55 @@ export default function EventAttendeesPage() {
 
 					{/* Filters */}
 					<Card className='mb-6'>
-						<CardHeader>
-							<div className='flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0'>
-								<CardTitle className='text-lg flex items-center gap-2'>
+						<CardHeader className='-mb-6'>
+							<div className='flex flex-col gap-4'>
+								<CardTitle className='text-lg flex items-center gap-2 w-full sm:w-auto justify-start'>
 									<Filter className='w-5 h-5' />
 									Filter Attendees
 								</CardTitle>
-								<div className='flex flex-wrap items-center gap-2'>
-									<Button onClick={handleOpenAddAttendeesDialog} className='flex items-center gap-2 text-sm'>
+								<div className='flex items-center flex-col sm:flex-row gap-2 w-full sm:w-auto'>
+									<Button onClick={handleOpenAddAttendeesDialog} className='flex items-center gap-2 w-full sm:w-auto'>
 										<UserPlus className='w-4 h-4' />
-										<span className='hidden sm:inline'>Add Attendees</span>
-										<span className='sm:hidden'>Add</span>
+										Add Attendees
 									</Button>
-									<Button
-										onClick={handleExportEventAttendees}
-										disabled={isExporting || event.users?.data.length === 0}
-										variant='outline'
-										className='flex items-center gap-2 bg-transparent text-sm'>
-										<Download className='w-4 h-4' />
-										<span className='hidden md:inline'>{isExporting ? "Exporting..." : `Export Attendees (${event.users?.total})`}</span>
-										<span className='md:hidden'>{isExporting ? "Exporting..." : "Export"}</span>
-									</Button>
+									<div className='flex flex-col sm:flex-row gap-2'>
+										<Button
+											onClick={handleExportEventAttendees}
+											disabled={isExporting || eventUsers?.users.total === 0}
+											variant='outline'
+											className='flex items-center gap-2 bg-transparent w-full sm:w-auto'>
+											<Download className='w-4 h-4' />
+											{isExporting ? "Exporting..." : "Export CSV"}
+										</Button>
+										<Button
+											onClick={handleExportEventAttendeesPDF}
+											disabled={isExporting || eventUsers?.users.total === 0}
+											variant='outline'
+											className='flex items-center gap-2 bg-transparent w-full sm:w-auto'>
+											<Download className='w-4 h-4' />
+											{isExporting ? "Exporting..." : "Export PDF"}
+										</Button>
+									</div>
 									{selectedAttendeesForDeletion.size > 0 && (
 										<Button
 											variant='destructive'
 											onClick={handleDeleteSelectedAttendees}
 											disabled={isDetaching}
-											className='flex items-center gap-2 text-sm'>
+											className='flex items-center gap-2 w-full sm:w-auto'>
 											{isDetaching ? (
 												<>
 													<Loader2 className='w-4 h-4 animate-spin' />
-													<span className='hidden sm:inline'>Deleting...</span>
-													<span className='sm:hidden'>...</span>
+													Deleting...
 												</>
 											) : (
 												<>
 													<Trash2 className='w-4 h-4' />
-													<span className='hidden sm:inline'>Delete Selected ({selectedAttendeesForDeletion.size})</span>
-													<span className='sm:hidden'>Delete ({selectedAttendeesForDeletion.size})</span>
+													Delete Selected ({selectedAttendeesForDeletion.size})
 												</>
 											)}
 										</Button>
 									)}
-									<div className='flex items-center gap-1 ml-auto lg:ml-0'>
+									<div className='flex gap-2 flex-row max-sm:justify-start items-start w-full sm:w-auto'>
 										<Button variant={viewMode === "grid" ? "default" : "outline"} size='sm' onClick={() => setViewMode("grid")}>
 											<Grid3X3 className='w-4 h-4' />
 										</Button>
@@ -398,7 +470,7 @@ export default function EventAttendeesPage() {
 							</div>
 						</CardHeader>
 						<CardContent>
-							<div className='flex flex-col space-y-4'>
+							<div className='flex flex-col lg:flex-row gap-4'>
 								<div className='flex-1'>
 									<div className='relative'>
 										<Search className='absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4' />
@@ -411,38 +483,55 @@ export default function EventAttendeesPage() {
 									</div>
 								</div>
 							</div>
-							<div className='flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0 mt-4 pt-4 border-t'>
+							<div className='flex items-center justify-between mt-4 pt-4 border-t'>
 								<div className='flex items-center space-x-2'>
 									<Checkbox
 										id='select-all-attendees'
-										checked={selectedAttendeesForDeletion.size === attendees?.length && attendees?.length > 0}
+										checked={selectedAttendeesForDeletion.size === filteredAttendees?.length && filteredAttendees?.length > 0}
 										onCheckedChange={handleSelectAllAttendees}
-										disabled={attendees?.length === 0}
+										disabled={filteredAttendees?.length === 0}
 									/>
 									<label htmlFor='select-all-attendees' className='text-sm font-medium'>
-										Select All ({attendees?.length})
+										Select All ({filteredAttendees?.length})
 									</label>
 								</div>
-								<div className='flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-gray-600'>
-									<p>
-										Showing {event.users?.to} of {event.users?.total} attendees
-									</p>
-									{searchTerm && (
-										<Button variant='outline' size='sm' onClick={clearFilters} className='bg-transparent w-fit'>
-											Clear Filters
-										</Button>
-									)}
-								</div>
+								<p className='text-sm text-gray-600'>
+									Showing {filteredAttendees?.length} of {eventUsers?.users.total || 0} attendees
+								</p>
+								{searchTerm && (
+									<Button variant='outline' size='sm' onClick={clearFilters} className='bg-transparent'>
+										Clear Filters
+									</Button>
+								)}
 							</div>
 						</CardContent>
 					</Card>
 					{/* Attendees Display */}
-					{attendees && attendees.length > 0 ? (
+					{isUsersLoading ? (
+						<Card className='py-0'>
+							<CardContent className='text-center py-12'>
+								<div className='flex items-center justify-center gap-2'>
+									<Loader2 className='w-16 h-16 animate-spin text-gray-500' />
+								</div>
+							</CardContent>
+						</Card>
+					) : usersError ? (
+						<Card>
+							<CardContent className='text-center py-12'>
+								<Users className='w-16 h-16 text-red-400 mx-auto mb-4' />
+								<p className='text-gray-500 mb-2'>Failed to load attendees</p>
+								<p className='text-sm text-red-600 mb-4'>{usersError.message}</p>
+								<Button variant='outline' className='bg-transparent' onClick={() => window.location.reload()}>
+									Try Again
+								</Button>
+							</CardContent>
+						</Card>
+					) : filteredAttendees.length > 0 ? (
 						<div
 							className={cn(
 								viewMode === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" : "space-y-3"
 							)}>
-							{attendees?.map((attendee) => (
+							{filteredAttendees?.map((attendee) => (
 								<Card
 									key={attendee.id}
 									className={cn("hover:shadow-md transition-shadow cursor-pointer", viewMode === "list" ? "p-0" : "py-4")}
@@ -458,7 +547,7 @@ export default function EventAttendeesPage() {
 												/>
 											</div>
 											<div className='flex flex-col items-center text-center space-y-3'>
-												{attendees && (
+												{filteredAttendees && (
 													<UserAvatar user={attendee} avatarSize='w-14 h-14 sm:w-16 sm:h-16 border-1' fallbackStyle='text-base sm:text-lg' />
 												)}
 												<div className='w-full space-y-1'>
@@ -519,87 +608,81 @@ export default function EventAttendeesPage() {
 						</Card>
 					)}
 
-					{/* Pagination */}
-					{event?.users?.data && event?.users?.data.length > 0 && event?.users?.total > pagination.pageSize && (
-						<div className='flex justify-center mt-6 px-2'>
-							<Pagination>
-								<PaginationContent className='gap-1'>
-									{pagination.pageIndex > 0 && (
+					{/* Pagination Controls */}
+					{totalPages > 1 && (
+						<Card className='mt-6'>
+							<CardContent className='flex items-center justify-between py-4'>
+								<div className='text-sm text-gray-600'>
+									Showing {eventUsers?.users.from || 0} to {eventUsers?.users.to || 0} of {eventUsers?.users.total || 0} attendees
+								</div>
+								<Pagination>
+									<PaginationContent>
 										<PaginationItem>
 											<PaginationPrevious
-												onClick={() => setPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex - 1 }))}
-												className='cursor-pointer h-9 w-9 p-0 sm:h-10 sm:w-auto sm:px-4 sm:py-2'>
-												<span className='sr-only sm:not-sr-only sm:ml-2'>Previous</span>
-											</PaginationPrevious>
+												href='#'
+												onClick={(e) => {
+													e.preventDefault();
+													if (hasPreviousPage) handlePageChange(currentPage - 1);
+												}}
+												className={!hasPreviousPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
+											/>
 										</PaginationItem>
-									)}
 
-									{/* Page numbers - responsive display */}
-									{event?.users && (
-										<>
-											{/* Show fewer pages on mobile */}
-											<div className='flex items-center gap-1'>
-												{/* Previous pages - show 1 on mobile, 2 on desktop */}
-												{Array.from(
-													{
-														length: Math.min(2, pagination.pageIndex),
-													},
-													(_, i) => (
-														<PaginationItem key={pagination.pageIndex - i - 1} className={i > 0 ? "hidden sm:block" : ""}>
-															<PaginationLink
-																onClick={() => setPagination((prev) => ({ ...prev, pageIndex: pagination.pageIndex - i - 1 }))}
-																className='cursor-pointer h-9 w-9 p-0 text-sm'>
-																{pagination.pageIndex - i}
-															</PaginationLink>
-														</PaginationItem>
-													)
-												).reverse()}
+										{/* Page Numbers */}
+										{Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+											let pageNumber;
+											if (totalPages <= 7) {
+												pageNumber = i + 1;
+											} else {
+												// Smart pagination logic
+												if (currentPage <= 4) {
+													pageNumber = i + 1;
+												} else if (currentPage >= totalPages - 3) {
+													pageNumber = totalPages - 6 + i;
+												} else {
+													pageNumber = currentPage - 3 + i;
+												}
+											}
 
-												{/* Current page */}
-												<PaginationItem>
-													<PaginationLink isActive className='cursor-pointer h-9 w-9 p-0 text-sm'>
-														{pagination.pageIndex + 1}
+											if (pageNumber < 1 || pageNumber > totalPages) return null;
+
+											return (
+												<PaginationItem key={pageNumber}>
+													<PaginationLink
+														href='#'
+														onClick={(e) => {
+															e.preventDefault();
+															handlePageChange(pageNumber);
+														}}
+														isActive={currentPage === pageNumber}
+														className='cursor-pointer'>
+														{pageNumber}
 													</PaginationLink>
 												</PaginationItem>
+											);
+										})}
 
-												{/* Next pages - show 1 on mobile, 2 on desktop */}
-												{Array.from(
-													{
-														length: Math.min(2, Math.max(0, Math.ceil(event.users.total / pagination.pageSize) - pagination.pageIndex - 1)),
-													},
-													(_, i) => (
-														<PaginationItem key={pagination.pageIndex + i + 1} className={i > 0 ? "hidden sm:block" : ""}>
-															<PaginationLink
-																onClick={() => setPagination((prev) => ({ ...prev, pageIndex: pagination.pageIndex + i + 1 }))}
-																className='cursor-pointer h-9 w-9 p-0 text-sm'>
-																{pagination.pageIndex + i + 2}
-															</PaginationLink>
-														</PaginationItem>
-													)
-												)}
+										{/* Show ellipsis if there are more pages */}
+										{totalPages > 7 && currentPage < totalPages - 3 && (
+											<PaginationItem>
+												<PaginationEllipsis />
+											</PaginationItem>
+										)}
 
-												{/* Show ellipsis if there are more pages (only on larger screens) */}
-												{Math.ceil(event.users.total / pagination.pageSize) > pagination.pageIndex + 3 && (
-													<PaginationItem className='hidden sm:block'>
-														<PaginationEllipsis className='h-9 w-9 p-0' />
-													</PaginationItem>
-												)}
-											</div>
-										</>
-									)}
-
-									{event?.users && pagination.pageIndex < Math.ceil(event.users.total / pagination.pageSize) - 1 && (
 										<PaginationItem>
 											<PaginationNext
-												onClick={() => setPagination((prev) => ({ ...prev, pageIndex: prev.pageIndex + 1 }))}
-												className='cursor-pointer h-9 w-9 p-0 sm:h-10 sm:w-auto sm:px-4 sm:py-2'>
-												<span className='sr-only sm:not-sr-only sm:mr-2'>Next</span>
-											</PaginationNext>
+												href='#'
+												onClick={(e) => {
+													e.preventDefault();
+													if (hasNextPage) handlePageChange(currentPage + 1);
+												}}
+												className={!hasNextPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
+											/>
 										</PaginationItem>
-									)}
-								</PaginationContent>
-							</Pagination>
-						</div>
+									</PaginationContent>
+								</Pagination>
+							</CardContent>
+						</Card>
 					)}
 
 					{/* User Details Dialog */}

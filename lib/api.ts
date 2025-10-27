@@ -159,6 +159,63 @@ async function downloadCSV(url: string, fallbackFilename: string): Promise<void>
 	}
 }
 
+// Helper function to extract filename from Content-Disposition header for PDF
+function getFilenameFromResponsePDF(response: Response): string {
+	const contentDisposition = response.headers.get("content-disposition");
+	if (contentDisposition) {
+		const matches = /filename="([^"]+)"/.exec(contentDisposition);
+		if (matches && matches[1]) {
+			return matches[1];
+		}
+	}
+	return `export_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.pdf`;
+}
+
+// Generic function for PDF downloads
+async function downloadPDF(url: string, fallbackFilename: string): Promise<void> {
+	try {
+		const headers: HeadersInit = {
+			Accept: "application/pdf",
+		};
+
+		if (authToken) {
+			headers["Authorization"] = `Bearer ${authToken}`;
+		}
+
+		const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+		const response = await fetch(`${baseUrl}${url}`, {
+			method: "GET",
+			headers,
+		});
+
+		if (!response.ok) {
+			const errorBody = await response.json();
+			const error: ApiError = new Error(errorBody.message || "PDF export failed");
+			error.status = response.status;
+			error.error = errorBody.error;
+			throw error;
+		}
+
+		const blob = await response.blob();
+		const filename = getFilenameFromResponsePDF(response) || fallbackFilename;
+
+		// Create download link
+		const url_obj = window.URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url_obj;
+		link.download = filename;
+		document.body.appendChild(link);
+		link.click();
+
+		// Cleanup
+		document.body.removeChild(link);
+		window.URL.revokeObjectURL(url_obj);
+	} catch (error) {
+		console.error("PDF download failed:", error);
+		throw error;
+	}
+}
+
 /**
  * Export all users with their event attendance count to CSV
  */
@@ -183,5 +240,15 @@ export async function exportEventAttendees(eventId: number): Promise<void> {
 	return downloadCSV(
 		`/events/${eventId}/export/csv/attendees`,
 		`event_${eventId}_attendees_${new Date().toISOString().slice(0, 10)}.csv`
+	);
+}
+
+/**
+ * Export attendees of a specific event to PDF
+ */
+export async function exportEventAttendeesPDF(eventId: number): Promise<void> {
+	return downloadPDF(
+		`/events/${eventId}/export/pdf/attendees`,
+		`event_${eventId}_attendees_${new Date().toISOString().slice(0, 10)}.pdf`
 	);
 }

@@ -107,6 +107,11 @@ export type UserWithRelations = User & {
 	activityLogs?: Array<{ id: number }>;
 };
 
+export interface UserForEvent {
+	message: string;
+	event: Event;
+	users: PaginatedResponse<User>;
+}
 export interface Event {
 	attended_count: number;
 	id: number;
