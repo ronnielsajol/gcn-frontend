@@ -36,7 +36,6 @@ import EventAttendeesPageSkeleton from "@/components/skeletons/event-attendees-p
 import { UserDetailsDialog } from "@/components/user-details-dialog";
 import { AddAttendeesDialog } from "@/components/add-attendees-dialog";
 import { fetchStatsForEventSpheres } from "@/lib/api/stats";
-import { PaginationParams } from "@/lib/api/user";
 import {
 	Pagination,
 	PaginationContent,
@@ -50,8 +49,7 @@ import useDebounce from "@/hooks/use-debounce";
 
 // --- React Query Setup ---
 const queryKeys = {
-	eventDetails: (eventId: string, page: number, perPage: number, search: string) =>
-		["events", eventId, "attendees", page, perPage, search] as const,
+	eventDetails: (eventId: string) => ["events", eventId, "details"] as const,
 	eventUsers: (eventId: string, page?: number, search?: string) => ["events", eventId, "users", page, search] as const,
 	paginatedUsers: () => ["users", "paginated"] as const,
 };
@@ -93,12 +91,6 @@ export default function EventAttendeesPage() {
 
 	const [isExporting, setIsExporting] = useState(false);
 
-	//Pagination
-	const [pagination, setPagination] = useState<PaginationParams>({
-		pageIndex: 0,
-		pageSize: 20,
-	});
-
 	// Reset page to 1 when search term changes
 	useEffect(() => {
 		setCurrentPage(1);
@@ -108,14 +100,8 @@ export default function EventAttendeesPage() {
 	const { handleAttachUsers, isAttaching, attachError, handleDetachUsers, isDetaching } =
 		useEventAttendeesMutations(eventId);
 
-	const fetchEventDetails = async (eventId: string, page = 1, perPage = 20, search = ""): Promise<Event> => {
-		const params = new URLSearchParams();
-		params.append("page", page.toString());
-		params.append("per_page", perPage.toString());
-		if (search) {
-			params.append("search", search);
-		}
-		const response = await apiFetch<Event>(`/events/${eventId}?${params.toString()}`, "GET");
+	const fetchEventDetails = async (eventId: string): Promise<Event> => {
+		const response = await apiFetch<Event>(`/events/${eventId}`, "GET");
 		return response;
 	};
 
@@ -125,8 +111,8 @@ export default function EventAttendeesPage() {
 		isLoading: eventLoading,
 		error: eventError,
 	} = useQuery({
-		queryKey: queryKeys.eventDetails(eventId, pagination.pageIndex + 1, pagination.pageSize, searchTerm),
-		queryFn: () => fetchEventDetails(eventId, pagination.pageIndex + 1, pagination.pageSize, searchTerm),
+		queryKey: queryKeys.eventDetails(eventId),
+		queryFn: () => fetchEventDetails(eventId),
 		staleTime: 1000 * 60 * 5,
 		enabled: !!eventId,
 	});
@@ -143,12 +129,8 @@ export default function EventAttendeesPage() {
 		enabled: !!eventId,
 	});
 
-	const {
-		data: stats,
-		isLoading: statsLoading,
-		error: statsError,
-	} = useQuery({
-		queryKey: ["stats"],
+	const { data: stats } = useQuery({
+		queryKey: ["stats", eventId],
 		queryFn: () => fetchStatsForEventSpheres(eventId),
 		staleTime: 1000 * 60 * 5,
 	});
@@ -421,7 +403,7 @@ export default function EventAttendeesPage() {
 										<UserPlus className='w-4 h-4' />
 										Add Attendees
 									</Button>
-									<div className='flex flex-col sm:flex-row gap-2'>
+									<div className='flex flex-col w-full sm:w-auto sm:flex-row gap-2'>
 										<Button
 											onClick={handleExportEventAttendees}
 											disabled={isExporting || eventUsers?.users.total === 0}

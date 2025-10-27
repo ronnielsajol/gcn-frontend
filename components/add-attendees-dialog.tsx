@@ -12,11 +12,13 @@ import { apiFetch } from "@/lib/api";
 import type { User, PaginatedResponse } from "@/types";
 import UserAvatar from "@/components/user-avatar";
 import { CreateUserDialog } from "./create-user-dialog";
+import useDebounce from "@/hooks/use-debounce";
 
 type UserApiResponse = PaginatedResponse<User>;
 
-const fetchPaginatedUsers = async ({ pageParam = 1 }): Promise<UserApiResponse> => {
-	const response = await apiFetch<UserApiResponse>(`/users?page=${pageParam}`, "GET");
+const fetchPaginatedUsers = async ({ pageParam = 1, searchTerm = "" }): Promise<UserApiResponse> => {
+	const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : "";
+	const response = await apiFetch<UserApiResponse>(`/users?page=${pageParam}${searchParam}`, "GET");
 	return response;
 };
 
@@ -41,6 +43,9 @@ export const AddAttendeesDialog = ({
 	const [userSearchTerm, setUserSearchTerm] = useState("");
 	const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
 
+	// Debounce search term to avoid too many API calls
+	const debouncedSearchTerm = useDebounce(userSearchTerm, 500);
+
 	const {
 		data: usersData,
 		error: usersError,
@@ -49,8 +54,8 @@ export const AddAttendeesDialog = ({
 		isLoading: isLoadingUsers,
 		isFetchingNextPage,
 	} = useInfiniteQuery({
-		queryKey: ["users", "paginated"],
-		queryFn: fetchPaginatedUsers,
+		queryKey: ["users", "paginated", debouncedSearchTerm],
+		queryFn: ({ pageParam }) => fetchPaginatedUsers({ pageParam: pageParam as number, searchTerm: debouncedSearchTerm }),
 		getNextPageParam: (lastPage) => {
 			if (lastPage.next_page_url || lastPage.current_page < lastPage.last_page) {
 				return lastPage.current_page + 1;
@@ -100,13 +105,8 @@ export const AddAttendeesDialog = ({
 
 	// Flatten pages from infinite query for display
 	const allUsers = usersData?.pages.flatMap((page) => page.data) || [];
-	const availableUsers = allUsers.filter(
-		(user) =>
-			!currentAttendeeIds.includes(user.id) &&
-			(user.first_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-				user.last_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-				user.email?.toLowerCase().includes(userSearchTerm.toLowerCase()))
-	);
+	// Filter out users who are already attendees (server-side search handles the text filtering)
+	const availableUsers = allUsers.filter((user) => !currentAttendeeIds.includes(user.id));
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleClose}>
