@@ -16,13 +16,22 @@ import useDebounce from "@/hooks/use-debounce";
 
 type UserApiResponse = PaginatedResponse<User>;
 
-const fetchPaginatedUsers = async ({ pageParam = 1, searchTerm = "" }): Promise<UserApiResponse> => {
+const fetchPaginatedUsers = async ({
+	pageParam = 1,
+	searchTerm = "",
+	event_id,
+}: {
+	pageParam?: number;
+	searchTerm?: string;
+	event_id: string | number;
+}): Promise<UserApiResponse> => {
 	const searchParam = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : "";
-	const response = await apiFetch<UserApiResponse>(`/users?page=${pageParam}${searchParam}`, "GET");
+	const response = await apiFetch<UserApiResponse>(`/users?page=${pageParam}${searchParam}&event_id=${event_id}`, "GET");
 	return response;
 };
 
 interface AddAttendeesDialogProps {
+	event_id: string | number;
 	isOpen: boolean;
 	onClose: () => void;
 	currentAttendeeIds: (string | number)[];
@@ -38,6 +47,7 @@ export const AddAttendeesDialog = ({
 	onAddUsers,
 	isAttaching,
 	attachError,
+	event_id,
 }: AddAttendeesDialogProps) => {
 	const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
 	const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -55,7 +65,8 @@ export const AddAttendeesDialog = ({
 		isFetchingNextPage,
 	} = useInfiniteQuery({
 		queryKey: ["users", "paginated", debouncedSearchTerm],
-		queryFn: ({ pageParam }) => fetchPaginatedUsers({ pageParam: pageParam as number, searchTerm: debouncedSearchTerm }),
+		queryFn: ({ pageParam }) =>
+			fetchPaginatedUsers({ pageParam: pageParam as number, searchTerm: debouncedSearchTerm, event_id }),
 		getNextPageParam: (lastPage) => {
 			if (lastPage.next_page_url || lastPage.current_page < lastPage.last_page) {
 				return lastPage.current_page + 1;
@@ -170,6 +181,7 @@ export const AddAttendeesDialog = ({
 										<Checkbox
 											checked={selectedUserIds.includes(Number(user.id))}
 											onCheckedChange={(checked) => handleUserSelection(Number(user.id), checked as boolean)}
+											disabled={user.is_event_attendee}
 										/>
 										<UserAvatar user={user} avatarSize='w-10 h-10 border-1 border-gray-300' />
 										<div className='flex-1 min-w-0'>
@@ -178,6 +190,11 @@ export const AddAttendeesDialog = ({
 											</h4>
 											<p className='text-sm text-gray-600 truncate'>{user.email}</p>
 										</div>
+										{user.is_event_attendee && (
+											<Badge variant='outline' className='text-blue-600 border-blue-600'>
+												Attending
+											</Badge>
+										)}
 									</div>
 								))}
 								{isFetchingNextPage && (

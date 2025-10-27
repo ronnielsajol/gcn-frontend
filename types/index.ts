@@ -88,6 +88,7 @@ export type User = {
 	name_key?: string | null;
 	/** Optional review-needed flag. */
 	needs_review?: boolean;
+	is_event_attendee?: boolean;
 };
 
 /** Includes hidden/private DB-backed fields. */

@@ -679,6 +679,7 @@ export default function EventAttendeesPage() {
 
 					{/* Add Attendees Dialog */}
 					<AddAttendeesDialog
+						event_id={event.id}
 						isOpen={isAddAttendeesDialogOpen}
 						onClose={() => setIsAddAttendeesDialogOpen(false)}
 						currentAttendeeIds={event.users?.data.map((user) => user.id) || []}
