@@ -31,7 +31,7 @@ import { useEventMutations } from "@/hooks/useEventMutations";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, formatDate2, formatTime } from "@/lib/utils";
 
 // --- React Query Setup ---
 const queryKeys = {
@@ -96,8 +96,8 @@ export default function EventsPage() {
 			name: event.name,
 			description: event.description,
 			location: event.location,
-			start_time: event.start_time.slice(0, 16),
-			end_time: event.end_time.slice(0, 16),
+			start_time: utcToLocalDatetimeString(event.start_time),
+			end_time: utcToLocalDatetimeString(event.end_time),
 		});
 		setIsEditModalOpen(true);
 	};
@@ -110,7 +110,13 @@ export default function EventsPage() {
 	const handleSubmitCreate = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			await createEvent(formData);
+			// Convert local times to UTC before sending to API
+			const dataToSend = {
+				...formData,
+				start_time: localDatetimeStringToUTC(formData.start_time),
+				end_time: localDatetimeStringToUTC(formData.end_time),
+			};
+			await createEvent(dataToSend);
 			setIsCreateModalOpen(false);
 			resetForm();
 			toast.success("Event created successfully");
@@ -154,7 +160,13 @@ export default function EventsPage() {
 		if (!eventToEdit) return;
 
 		try {
-			await updateEvent(eventToEdit.id, formData);
+			// Convert local times to UTC before sending to API
+			const dataToSend = {
+				...formData,
+				start_time: localDatetimeStringToUTC(formData.start_time),
+				end_time: localDatetimeStringToUTC(formData.end_time),
+			};
+			await updateEvent(eventToEdit.id, dataToSend);
 			setIsEditModalOpen(false);
 			setEventToEdit(null);
 			resetForm();
@@ -217,6 +229,25 @@ export default function EventsPage() {
 	const creators = Array.from(new Set(allEventsForFilters.map((event) => event.created_by.first_name)));
 
 	// --- Helper Functions ---
+
+	// Convert UTC datetime string to local datetime string for datetime-local input
+	const utcToLocalDatetimeString = (utcString: string): string => {
+		const date = new Date(utcString);
+		// Get local ISO string and remove seconds and timezone
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, "0");
+		const day = String(date.getDate()).padStart(2, "0");
+		const hours = String(date.getHours()).padStart(2, "0");
+		const minutes = String(date.getMinutes()).padStart(2, "0");
+		return `${year}-${month}-${day}T${hours}:${minutes}`;
+	};
+
+	// Convert local datetime string from datetime-local input to UTC ISO string
+	const localDatetimeStringToUTC = (localString: string): string => {
+		const date = new Date(localString);
+		return date.toISOString();
+	};
+
 	const formatDateTime = (dateString: string) => {
 		const date = new Date(dateString);
 
@@ -261,11 +292,21 @@ export default function EventsPage() {
 	};
 
 	const getDuration = (startTime: string, endTime: string) => {
+		// Parse as UTC timestamps to get accurate millisecond difference
 		const start = new Date(startTime);
 		const end = new Date(endTime);
+
+		// Calculate difference in milliseconds (this works correctly regardless of timezone)
 		const diffMs = end.getTime() - start.getTime();
+
+		// Convert to hours and minutes
 		const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
 		const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+		// Handle negative durations (end before start)
+		if (diffMs < 0) {
+			return "Invalid duration";
+		}
 
 		if (diffHours > 0) {
 			return `${diffHours}h ${diffMinutes}m`;
@@ -353,8 +394,6 @@ export default function EventsPage() {
 					) : filteredEvents && filteredEvents.length > 0 ? (
 						<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
 							{filteredEvents.map((event) => {
-								const startDateTime = formatDateTime(event.start_time);
-								const endDateTime = formatDateTime(event.end_time);
 								const eventStatus = getEventStatusStyle(event.status);
 								const duration = getDuration(event.start_time, event.end_time);
 
@@ -409,12 +448,16 @@ export default function EventsPage() {
 												</div>
 												<div className='flex items-center gap-2 text-sm text-gray-600'>
 													<Calendar className='w-4 h-4 flex-shrink-0' />
-													<span>{startDateTime.date}</span>
+													<span>
+														{formatDate2(event.start_time) === formatDate2(event.end_time)
+															? formatDate2(event.start_time)
+															: `${formatDate2(event.start_time)} - ${formatDate2(event.end_time)}`}
+													</span>
 												</div>
 												<div className='flex items-center gap-2 text-sm text-gray-600'>
 													<Clock className='w-4 h-4 flex-shrink-0' />
 													<span>
-														{startDateTime.time} - {endDateTime.time} ({duration})
+														{formatTime(event.start_time)} - {formatTime(event.end_time)} ({duration})
 													</span>
 												</div>
 												<div className='flex items-center gap-2 text-sm text-gray-600'>
